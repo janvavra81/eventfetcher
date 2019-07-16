@@ -1,0 +1,9 @@
+# PHPStorm
+.idea/
+
+vendor/
+
+*.rej
+*.orig
+*.*~
+

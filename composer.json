@@ -1,0 +1,6 @@
+{
+    "require": {
+        "artack/dom-query": "^0.3.0",
+        "symfony/console": "^3.4"
+    }
+}
