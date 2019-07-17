@@ -8,8 +8,8 @@ class EventFetchCommand extends Command
 {
     protected static $defaultName = 'app:event-fetch';
     protected $idCounters = [
-        "event" => 17,
-        "post" => 446
+        "event" => 5000,
+        "post" => 5000
     ];
     protected $author = 1;
 
@@ -59,8 +59,10 @@ class EventFetchCommand extends Command
                 $eventDescription = $event->find(".text-content.cf")->getFirst();
                 $item["lector"] = $this->getText($eventDescription, ".wsw-12");
                 $item["time"] = $this->parseTime($eventDescription->getHtml());
+                $item["gmt_time"] = $this->transformToGmt($item["time"]);
                 $item["slug"] = $this->slugify($item["name"]);
                 $item["location_id"] = $locationId;
+                $item["price"] = preg_replace('/[^0-9]/', '', $this->getText($event, ".text.cf.design-01:nth-child(2) h3"));
                 if ($item["time"]) {
                     $item["event_id"] = $this->idCounters["event"]++;
                     $item["post_id"] = $this->idCounters["post"]++;
@@ -70,7 +72,12 @@ class EventFetchCommand extends Command
         }
 
         $now = new DateTime();
+        $gmtNow = ["now" => $now];
+        $gmtNow = $this->transformToGmt($gmtNow);
+        $gmtNow = $gmtNow["now"];
+
         $now = $now->format("Y-m-d H:i:s");
+        $gmtNow = $gmtNow->format("Y-m-d H:i:s");
 
         $lectors = array_map(function($a) {
             return trim(str_replace("&nbsp;", "", $a["lector"]));
@@ -83,9 +90,9 @@ class EventFetchCommand extends Command
                 "ID" => $item["post_id"],
                 "post_author" => $this->author,
                 "post_date" => $now,
-                "post_date_gmt" => $now,
+                "post_date_gmt" => $gmtNow,
                 "post_modified" => $now,
-                "post_modified_gmt" => $now,
+                "post_modified_gmt" => $gmtNow,
                 "post_content" => $this->prepareString($item["description"]),
                 "post_title" => $this->prepareString($item["name"]),
                 "post_status" => "publish",
@@ -115,8 +122,8 @@ class EventFetchCommand extends Command
                 "event_end_date" => $item["time"]["to"]->format("Y-m-d"),
                 "event_start_time" => $item["time"]["from"]->format("H:i:s"),
                 "event_end_time" => $item["time"]["to"]->format("H:i:s"),
-                "event_start" => $item["time"]["from"]->format("Y-m-d H:i:s"),
-                "event_end" => $item["time"]["to"]->format("Y-m-d H:i:s"),
+                "event_start" => $item["gmt_time"]["from"]->format("Y-m-d H:i:s"),
+                "event_end" => $item["gmt_time"]["to"]->format("Y-m-d H:i:s"),
                 "event_timezone" => "Europe/Prague",
                 "post_content" => $this->prepareString($item["description"]),
                 "event_rsvp" => 1,
@@ -130,6 +137,52 @@ class EventFetchCommand extends Command
                 $data[$key] = "'" . $val . "'";
             }
             $sql[] = "INSERT INTO `wp_em_events` (" . implode(",", array_keys($data)) . ") VALUES (" . implode(",", array_values($data)) . ");";
+        }
+
+        foreach ($res as $i => $item) {
+            $data = [
+                "_edit_last" => 0,
+                "_event_id" => $item["event_id"],
+                "_event_timezone" => "Europe/Prague",
+                "_event_start_time" => $item["time"]["from"]->format("H:i:s"),
+                "_event_end_time" => $item["time"]["to"]->format("H:i:s"),
+                "_event_start" => $item["time"]["from"]->format("Y-m-d H:i:s"),
+                "_event_end" => $item["time"]["to"]->format("Y-m-d H:i:s"),
+                "_event_start_date" => $item["time"]["from"]->format("Y-m-d"),
+                "_event_end_date" => $item["time"]["to"]->format("Y-m-d"),
+                "_event_rsvp" => 1,
+                "_event_rsvp_date" => $item["time"]["from"]->format("Y-m-d"),
+                "_event_rsvp_time" => $item["time"]["from"]->format("H:i:s"),
+                "_event_rsvp_spaces" => 50,
+                "_event_spaces" => 0,
+                "_location_id" => $locationId,
+                "_event_start_local" => $item["gmt_time"]["from"]->format("Y-m-d H:i:s"),
+                "_event_end_local" => $item["gmt_time"]["to"]->format("Y-m-d H:i:s")
+            ];
+            foreach ($data as $key => $val) {
+                $itemData = [$item["post_id"], $key, $val];
+                foreach ($itemData as $key => $val) {
+                    $itemData[$key] = "'" . $val . "'";
+                }
+                $sql[] = "INSERT INTO `wp_postmeta` (`post_id`,`meta_key`,`meta_value`) VALUES (" . implode(',', $itemData) . ");";
+            }
+        }
+
+        foreach ($res as $i => $item) {
+            $data = [
+                "event_id" => $item["event_id"],
+                "ticket_name" => "registrace",
+                "ticket_description" => "",
+                "ticket_price" => $item["price"],
+                "ticket_spaces" => 50,
+                "ticket_members" => 0,
+                "ticket_guests" => 0,
+                "ticket_required" => 0
+            ];
+            foreach ($data as $key => $val) {
+                $data[$key] = "'" . $val . "'";
+            }
+            $sql[] = "INSERT INTO `wp_em_tickets` (" . implode(",", array_keys($data)) . ") VALUES (" . implode(",", array_values($data)) . ");";
         }
 
         file_put_contents("result.sql", implode("\n", $sql));
@@ -231,5 +284,22 @@ class EventFetchCommand extends Command
         }
 
         return $text;
+    }
+
+    protected function transformToGmt($times)
+    {
+        if (!is_array($times)) {
+            return $times;
+        }
+
+        $res = [];
+
+        foreach ($times as $i => $val) {
+            $gmtDate = gmdate('Y-m-d H:i:s', strtotime($val->format("Y-m-d H:i:s")));
+            $gmt = new DateTime($gmtDate);
+            $res[$i] = $gmt;
+        }
+
+        return $res;
     }
 }
