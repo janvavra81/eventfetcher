@@ -54,18 +54,18 @@ class EventFetchCommand extends Command
 
             foreach ($events as $event) {
                 $item = [];
-                $item["name"] = $this->getText($event, "h3");
-                $item["description"] = $this->getHtml($event, ".text-content.cf");
                 $eventDescription = $event->find(".text-content.cf")->getFirst();
-                $item["lector"] = $this->getText($eventDescription, ".wsw-12");
                 $item["time"] = $this->parseTime($eventDescription->getHtml());
-                $item["gmt_time"] = $this->transformToGmt($item["time"]);
-                $item["slug"] = $this->slugify($item["name"]);
-                $item["location_id"] = $locationId;
-                $item["price"] = preg_replace('/[^0-9]/', '', $this->getText($event, ".text.cf.design-01:nth-child(2) h3"));
                 if ($item["time"]) {
                     $item["event_id"] = $this->idCounters["event"]++;
                     $item["post_id"] = $this->idCounters["post"]++;
+                    $item["name"] = $this->getText($event, "h3");
+                    $item["description"] = $this->getHtml($event, ".text-content.cf");
+                    $item["lector"] = $this->getText($eventDescription, ".wsw-12");
+                    $item["gmt_time"] = $this->transformToGmt($item["time"]);
+                    $item["slug"] = $this->slugify($item["name"]);
+                    $item["location_id"] = $locationId;
+                    $item["price"] = preg_replace('/[^0-9]/', '', $this->getText($event, ".text.cf.design-01:nth-child(2) h3"));
                     $res[] = $item;
                 }
             }
@@ -155,14 +155,14 @@ class EventFetchCommand extends Command
                 "_event_rsvp_time" => $item["time"]["from"]->format("H:i:s"),
                 "_event_rsvp_spaces" => 50,
                 "_event_spaces" => 0,
-                "_location_id" => $locationId,
+                "_location_id" => $item["location_id"],
                 "_event_start_local" => $item["gmt_time"]["from"]->format("Y-m-d H:i:s"),
                 "_event_end_local" => $item["gmt_time"]["to"]->format("Y-m-d H:i:s")
             ];
             foreach ($data as $key => $val) {
                 $itemData = [$item["post_id"], $key, $val];
-                foreach ($itemData as $key => $val) {
-                    $itemData[$key] = "'" . $val . "'";
+                foreach ($itemData as $k => $v) {
+                    $itemData[$k] = "'" . $v . "'";
                 }
                 $sql[] = "INSERT INTO `wp_postmeta` (`post_id`,`meta_key`,`meta_value`) VALUES (" . implode(',', $itemData) . ");";
             }
