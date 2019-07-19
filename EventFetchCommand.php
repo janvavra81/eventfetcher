@@ -207,7 +207,7 @@ class EventFetchCommand extends Command
 
     protected function parseTime($text)
     {
-        $pattern = '/(\d+)\.(.*)(\d{4})[^\d]*(\d+\:\d+)[^\d]*(\d+\:\d+),/';
+        $pattern = '/(\d+)\.(.*)(\d{4})[^\d]*(\d+\:\d+)[^\d]*(\d+\:\d+)/';
         $hit = preg_match($pattern, $text, $matches);
         if ($hit) {
             $res = $this->parseSimpleTime($matches);
